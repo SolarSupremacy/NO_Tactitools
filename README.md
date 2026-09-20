@@ -1,6 +1,10 @@
 # ☢️ Nuclear Option Tactical Tools ☢️
 
----
+[![Release](https://img.shields.io/github/v/release/SolarSupremacy/NO_Tactitools?style=flat)](https://github.com/SolarSupremacy/NO_Tactitools/releases)
+![Game Version](https://img.shields.io/badge/Nuclear_Option-v0.34.2-green?style=flat)
+![BepInEx Version](https://img.shields.io/badge/BepInEx-v5.4.23.4-green?style=flat)
+
+> This fork is primarily intended for experimental development and improved compatibility with HUD changes such as [Collimated HUD](https://github.com/Solar-Dynamics-Nuclear-Option/Collimated-HUD).)
 
 ## About
 
