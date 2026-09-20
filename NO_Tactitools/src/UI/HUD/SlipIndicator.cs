@@ -1,33 +1,42 @@
-using HarmonyLib;
-using UnityEngine.UI;
-using NO_Tactitools.Core;
-using UnityEngine;
+using System;
 using System.Collections.Generic;
+using HarmonyLib;
+using NO_Tactitools.Core;
 using NuclearOption.UIStyleSystem;
+using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace NO_Tactitools.UI.HUD;
 
 [HarmonyPatch(typeof(MainMenu), "Start")]
-class SlipIndicatorPlugin {
-    private static bool initialized = false;
-    static void Postfix() {
-        if (!initialized) {
-            Plugin.Log($"[SI] Slip Indicator plugin starting !");
-            Plugin.harmony.PatchAll(typeof(SlipIndicatorComponent.OnPlatformStart));
-            Plugin.harmony.PatchAll(typeof(SlipIndicatorComponent.OnPlatformUpdate));
-            initialized = true;
-            Plugin.Log("[SI] Slip Indicator plugin successfully started !");
-        }
+internal class SlipIndicatorPlugin
+{
+    private static bool _initialized;
+
+    private static void Postfix()
+    {
+        if (_initialized) return;
+
+        Plugin.Log("[SI] Slip Indicator plugin starting !");
+        Plugin.harmony.PatchAll(typeof(SlipIndicatorComponent.OnPlatformStart));
+        Plugin.harmony.PatchAll(typeof(SlipIndicatorComponent.OnPlatformUpdate));
+        _initialized = true;
+        Plugin.Log("[SI] Slip Indicator plugin successfully started !");
     }
 }
 
-public class SlipIndicatorComponent {
-    static class LogicEngine {
-        static public void Init() {
+public class SlipIndicatorComponent
+{
+    private static class LogicEngine
+    {
+        public static void Init()
+        {
             InternalState.SIWidget?.Destroy();
             InternalState.SIWidget = null;
-            InternalState.authorizedPlatforms = FileUtilities.GetListFromConfigFile("SlipIndicator_AuthorizedPlatforms.txt");
-            InternalState.isAuthorized = InternalState.authorizedPlatforms.Contains(GameBindings.Player.Aircraft.GetPlatformName());
+            InternalState.authorizedPlatforms =
+                FileUtilities.GetListFromConfigFile("SlipIndicator_AuthorizedPlatforms.txt");
+            InternalState.isAuthorized =
+                InternalState.authorizedPlatforms.Contains(GameBindings.Player.Aircraft.GetPlatformName());
             if (!InternalState.isAuthorized) return;
 
             InternalState.slipBallOffset = 0f;
@@ -39,11 +48,11 @@ public class SlipIndicatorComponent {
             InternalState.sensitivity = InternalState.maxOffset / Plugin.slipIndicatorSensitivity.Value;
         }
 
-        static public void Update() {
+        public static void Update()
+        {
             if (GameBindings.Player.Aircraft.GetAircraft() == null
-                || !InternalState.isAuthorized) {
+                || !InternalState.isAuthorized)
                 return;
-            }
 
             float dt = Time.deltaTime;
             if (dt <= 0) return;
@@ -67,12 +76,11 @@ public class SlipIndicatorComponent {
 
             // regular situation
             float targetOffset;
-            if (Mathf.Abs(upForce) > 0.1f) {
+            if (Mathf.Abs(upForce) > 0.1f)
                 targetOffset = -lateralForce / Mathf.Abs(upForce);
-            } else {
+            else
                 // ball floats and slams
                 targetOffset = lateralForce != 0f ? -Mathf.Sign(lateralForce) : 0f;
-            }
 
             // second order damping, better sim of a ball in a damping fluid
             InternalState.slipBallOffset = Mathf.SmoothDamp(
@@ -83,122 +91,130 @@ public class SlipIndicatorComponent {
                 Mathf.Infinity,
                 dt);
 
-            InternalState.needsUpdate = (InternalState.currentX != Plugin.slipIndicatorPositionX.Value
-                || InternalState.currentY != Plugin.slipIndicatorPositionY.Value);
-            if (InternalState.needsUpdate) {
+            InternalState.needsUpdate = InternalState.currentX != Plugin.slipIndicatorPositionX.Value
+                                        || InternalState.currentY != Plugin.slipIndicatorPositionY.Value;
+            if (InternalState.needsUpdate)
+            {
                 InternalState.currentX = Plugin.slipIndicatorPositionX.Value;
                 InternalState.currentY = Plugin.slipIndicatorPositionY.Value;
             }
         }
     }
 
-    public static class InternalState {
+    public static class InternalState
+    {
         public static Vector3 lastVelocity = Vector3.zero;
         public static float smoothTime;
-        public static float slipBallOffset = 0f;
-        public static float slipBallVelocity = 0f; // used by SmoothDamp
+        public static float slipBallOffset;
+        public static float slipBallVelocity; // used by SmoothDamp
         public static float sensitivity;
         public static float maxOffset = 40f;
         public static int currentX;
         public static int currentY;
-        public static bool needsUpdate = false;
-        public static bool isAuthorized = false;
+        public static bool needsUpdate;
+        public static bool isAuthorized;
         public static List<string> authorizedPlatforms = [];
-        public static SlipIndicatorWidget SIWidget = null;
+        public static SlipIndicatorWidget SIWidget;
     }
 
-    static class DisplayEngine {
-        static public void Init() {
+    private static class DisplayEngine
+    {
+        public static void Init()
+        {
             if (!InternalState.isAuthorized) return;
             InternalState.SIWidget = new SlipIndicatorWidget(UIBindings.Game.GetFlightHUDCenterTransform());
         }
 
-        static public void Update() {
+        public static void Update()
+        {
             if (GameBindings.Player.Aircraft.GetAircraft() == null
                 || !InternalState.isAuthorized
                 || InternalState.SIWidget == null)
                 return;
 
-            if (InternalState.needsUpdate) {
+            if (InternalState.needsUpdate)
                 InternalState.SIWidget.SetPosition(new Vector2(InternalState.currentX, InternalState.currentY));
-            }
 
-            float xOffset = Mathf.Clamp(InternalState.slipBallOffset * InternalState.sensitivity, -InternalState.maxOffset, InternalState.maxOffset);
+            float xOffset = Mathf.Clamp(InternalState.slipBallOffset * InternalState.sensitivity,
+                -InternalState.maxOffset, InternalState.maxOffset);
             InternalState.SIWidget.UpdateDisplay(xOffset);
         }
     }
 
-    public class SlipIndicatorWidget {
+    public class SlipIndicatorWidget
+    {
+        public UIBindings.Draw.UILabel ballLabel;
         public GameObject containerObject;
         public Transform containerTransform;
         public UIBindings.Draw.UILine leftBar;
-        public UIBindings.Draw.UILine rightBar;
         public UIBindings.Draw.UILine leftOuterBar;
-        public UIBindings.Draw.UILine rightOuterBar;
-        public UIBindings.Draw.UILabel ballLabel;
         public float padding = 10f;
+        public UIBindings.Draw.UILine rightBar;
+        public UIBindings.Draw.UILine rightOuterBar;
 
-        public SlipIndicatorWidget(Transform parent) {
+        public SlipIndicatorWidget(Transform parent)
+        {
             containerObject = new GameObject("i_SI_Container");
             containerObject.AddComponent<RectTransform>();
             containerTransform = containerObject.transform;
             containerTransform.SetParent(parent, false);
-            containerTransform.localPosition = new Vector3(Plugin.slipIndicatorPositionX.Value, Plugin.slipIndicatorPositionY.Value, 0);
+            containerTransform.localPosition = new Vector3(Plugin.slipIndicatorPositionX.Value,
+                Plugin.slipIndicatorPositionY.Value, 0);
 
             float maxOffset = InternalState.maxOffset;
 
             leftBar = new UIBindings.Draw.UILine(
-                name: "i_SI_leftBar",
-                start: new Vector2(-9, -7),
-                end: new Vector2(-9, 7),
-                UIParent: containerTransform,
-                color: new Color(0f, 1f, 0f, Plugin.slipIndicatorTransparency.Value),
-                thickness: 1f,
-                material: UIBindings.Game.GetFlightHUDFontMaterial(),
-                antialiased: true,
-                context: ThemeManager.ThemeContext.HUD,
-                styleLabel: UIBindings.Draw.StyleLabels[ThemeManager.ThemeContext.HUD]["HUD_ImageMainColor"]
+                "i_SI_leftBar",
+                new Vector2(-9, -7),
+                new Vector2(-9, 7),
+                containerTransform,
+                new Color(0f, 1f, 0f, Plugin.slipIndicatorTransparency.Value),
+                1f,
+                UIBindings.Game.GetFlightHUDFontMaterial(),
+                true,
+                ThemeManager.ThemeContext.HUD,
+                UIBindings.Draw.StyleLabels[ThemeManager.ThemeContext.HUD]["HUD_ImageMainColor"]
             );
             rightBar = new UIBindings.Draw.UILine(
-                name: "i_SI_rightBar",
-                start: new Vector2(9, -7),
-                end: new Vector2(9, 7),
-                UIParent: containerTransform,
-                color: new Color(0f, 1f, 0f, Plugin.slipIndicatorTransparency.Value),
-                thickness: 1f,
-                material: UIBindings.Game.GetFlightHUDFontMaterial(),
-                antialiased: true,
-                context: ThemeManager.ThemeContext.HUD,
-                styleLabel: UIBindings.Draw.StyleLabels[ThemeManager.ThemeContext.HUD]["HUD_ImageMainColor"]
+                "i_SI_rightBar",
+                new Vector2(9, -7),
+                new Vector2(9, 7),
+                containerTransform,
+                new Color(0f, 1f, 0f, Plugin.slipIndicatorTransparency.Value),
+                1f,
+                UIBindings.Game.GetFlightHUDFontMaterial(),
+                true,
+                ThemeManager.ThemeContext.HUD,
+                UIBindings.Draw.StyleLabels[ThemeManager.ThemeContext.HUD]["HUD_ImageMainColor"]
             );
             leftOuterBar = new UIBindings.Draw.UILine(
-                name: "i_SI_leftOuterBar",
-                start: new Vector2(-maxOffset - padding, -7),
-                end: new Vector2(-maxOffset - padding, 7),
-                UIParent: containerTransform,
-                color: new Color(0f, 1f, 0f, Plugin.slipIndicatorTransparency.Value),
-                thickness: 1.5f,
-                material: UIBindings.Game.GetFlightHUDFontMaterial(),
-                antialiased: true,
-                context: ThemeManager.ThemeContext.HUD,
-                styleLabel: UIBindings.Draw.StyleLabels[ThemeManager.ThemeContext.HUD]["HUD_ImageMainColor"]
+                "i_SI_leftOuterBar",
+                new Vector2(-maxOffset - padding, -7),
+                new Vector2(-maxOffset - padding, 7),
+                containerTransform,
+                new Color(0f, 1f, 0f, Plugin.slipIndicatorTransparency.Value),
+                1.5f,
+                UIBindings.Game.GetFlightHUDFontMaterial(),
+                true,
+                ThemeManager.ThemeContext.HUD,
+                UIBindings.Draw.StyleLabels[ThemeManager.ThemeContext.HUD]["HUD_ImageMainColor"]
             );
             rightOuterBar = new UIBindings.Draw.UILine(
-                name: "i_SI_rightOuterBar",
-                start: new Vector2(maxOffset + padding, -7),
-                end: new Vector2(maxOffset + padding, 7),
-                UIParent: containerTransform,
-                color: new Color(0f, 1f, 0f, Plugin.slipIndicatorTransparency.Value),
-                thickness: 1.5f,
-                material: UIBindings.Game.GetFlightHUDFontMaterial(),
-                antialiased: true,
-                context: ThemeManager.ThemeContext.HUD,
-                styleLabel: UIBindings.Draw.StyleLabels[ThemeManager.ThemeContext.HUD]["HUD_ImageMainColor"]
+                "i_SI_rightOuterBar",
+                new Vector2(maxOffset + padding, -7),
+                new Vector2(maxOffset + padding, 7),
+                containerTransform,
+                new Color(0f, 1f, 0f, Plugin.slipIndicatorTransparency.Value),
+                1.5f,
+                UIBindings.Game.GetFlightHUDFontMaterial(),
+                true,
+                ThemeManager.ThemeContext.HUD,
+                UIBindings.Draw.StyleLabels[ThemeManager.ThemeContext.HUD]["HUD_ImageMainColor"]
             );
             ballLabel = new UIBindings.Draw.UILabel(
-                name: "i_SI_ballLabel",
-                position: Vector2.zero,
-                UIParent: containerTransform,
+                "i_SI_ballLabel",
+                Vector2.zero,
+                containerTransform,
                 color: new Color(0f, 1f, 0f, Plugin.slipIndicatorTransparency.Value),
                 fontSize: 35,
                 backgroundOpacity: 0f,
@@ -209,18 +225,20 @@ public class SlipIndicatorComponent {
             ballLabel.SetText("•");
         }
 
-        public void SetPosition(Vector2 position) {
-            if (containerTransform != null) {
-                containerTransform.localPosition = new Vector3(position.x, position.y, 0);
-            }
+        public void SetPosition(Vector2 position)
+        {
+            if (containerTransform != null) containerTransform.localPosition = new Vector3(position.x, position.y, 0);
         }
 
-        public void UpdateDisplay(float xOffset) {
+        public void UpdateDisplay(float xOffset)
+        {
             ballLabel.SetPosition(new Vector2(xOffset, 2));
         }
 
-        public void Destroy() {
-            if (containerObject != null) {
+        public void Destroy()
+        {
+            if (containerObject != null)
+            {
                 Object.Destroy(containerObject);
                 containerObject = null;
             }
@@ -228,18 +246,36 @@ public class SlipIndicatorComponent {
     }
 
     [HarmonyPatch(typeof(TacScreen), "Initialize")]
-    public static class OnPlatformStart {
-        static void Postfix() {
-            LogicEngine.Init();
-            DisplayEngine.Init();
+    public static class OnPlatformStart
+    {
+        private static void Postfix()
+        {
+            try
+            {
+                LogicEngine.Init();
+                DisplayEngine.Init();
+            }
+            catch (Exception e)
+            {
+                Plugin.Log($"[SI] Exception: {e}");
+            }
         }
     }
 
     [HarmonyPatch(typeof(TacScreen), "Update")]
-    public static class OnPlatformUpdate {
-        static void Postfix() {
-            LogicEngine.Update();
-            DisplayEngine.Update();
+    public static class OnPlatformUpdate
+    {
+        private static void Postfix()
+        {
+            try
+            {
+                LogicEngine.Update();
+                DisplayEngine.Update();
+            }
+            catch (Exception e)
+            {
+                Plugin.Log($"[SI] Exception: {e}");
+            }
         }
     }
 }

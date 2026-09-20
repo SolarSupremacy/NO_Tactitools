@@ -552,7 +552,7 @@ public class UIBindings {
         private static readonly TraverseCache<CombatHUD, GameObject> _topRightPanelCache = new("topRightPanel");
         private static readonly TraverseCache<TargetCam, TargetScreenUI> _targetScreenUICache = new("targetScreenUI");
         private static readonly TraverseCache<Cockpit, TacScreen> _tacScreenCache = new("tacScreen");
-        private static readonly TraverseCache<FlightHud, Transform> _flightHUDCenterCache = new("HUDCenter");
+        private static Transform _hudCenterTransform = null;
 
         private static TacScreen
             _cachedTacScreen = null; // For caching the tacscreen instance since finding it is expensive
@@ -594,14 +594,27 @@ public class UIBindings {
         }
 
         public static Transform GetFlightHUDCenterTransform() {
-            try {
-                Transform hudLockedTransform = _flightHUDCenterCache.GetValue(SceneSingleton<FlightHud>.i);
-                return hudLockedTransform;
+            try
+            {
+                if (!_hudCenterTransform)
+                {
+                    Plugin.Log("[UI] HUDCenter not cached. Searching...");
+                    GameObject hudCenter = GameObject.Find("HUDCenter");
+                    if (hudCenter)
+                    {
+                        Plugin.Log("[UI] HUDCenter found.");
+                        _hudCenterTransform = hudCenter.transform;
+                    }
+                }
+
+                return _hudCenterTransform;
             }
-            catch (NullReferenceException e) {
-                Plugin.Log(e.ToString());
-                return null;
+            catch (Exception e)
+            {
+                Plugin.Log($"[UI] HUDCenter Exception: {e}");
             }
+
+            return null;
         }
 
         // using find functions, get the first material from a text
